@@ -44,7 +44,7 @@
     (init [this] this)
     Stateless))
 
-(defn stateful-rf
+(defn- stateful-rf
   "Takes a normal stateful transducer and a rexf reducer, and returns
   a stateful recursive reducer factory."
   [xf rf]
@@ -56,7 +56,7 @@
       Reducer
       (reinit [_] (stateful-rf xf (reinit rf))))))
 
-(defn- stateful-xf
+(defn stateful-xf
   "Takes a normal stateful transducer and returns a stateful rexf
   transducer."
   [xf]
@@ -254,3 +254,17 @@
                     res)
                 
                 :otherwise (rf res elem))))))))
+
+(defn group-with
+  "group-with takes two predicates and combiner function, and returns
+  a stateful rexf transducer which recursively groups values.
+
+  start-pred must take one argument, the input element, and should return true
+  if this starts a new grouping. stop-pred must take two arguments, the first
+  the start element, and the second a potential stop element. If this returns
+  true, f is called with the arguments start-elem, inner values and stop-elem,
+  and passed to the inner rf."
+  [start-pred stop-pred f]
+  (group-with* start-pred stop-pred
+               (fn [ret rf start inner end]
+                 (rf ret (f start inner end)))))
