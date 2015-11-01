@@ -9,7 +9,7 @@
                             reduce into])
   (:import (java.util ArrayList)))
 
-(defprotocol ReducerFactory ;; So... it has come to this
+(defprotocol ReducerFactory ;; So... it has come to this naming scheme =/
   "A ReducerFactory produces recursive reducers. The reducers may be stateless
   or stateful."
   (init [this] "init returns a reducer"))
@@ -56,6 +56,34 @@
       Reducer
       (reinit [_] (stateful-rf xf (reinit rf))))))
 
+(defn- completing-xf
+  "Converts transducer which returns a reducer that only accepts 2-ary calls,
+  into a transducer which returns a rexf reducer. When completing or
+  init is called, they will be passed down to the reducer function. xf
+  is assumed to be stateful."
+  [xf rf]
+  (let [rf' (xf rf)]
+    (reify clojure.lang.IFn
+      (invoke [_] (rf))
+      (invoke [_ a] (rf a))
+      (invoke [_ a b] (rf' a b))
+      Reducer
+      (reinit [_] (completing-xf xf (reinit rf))))))
+
+(defn- global-stateful-rf
+  "Converts a stateful transducer and a rexf reducer into a global stateful rexf
+  reducer. A global stateful rexf reducer will pass complete and inits
+  downstream unless we are at the topmost recursion level."
+  [xf rf]
+  (let [rf' (xf rf)]
+    (reify clojure.lang.IFn
+      (invoke [_] (rf'))
+      (invoke [_ a] (rf' a))
+      (invoke [_ a b] (rf' a b))
+      Reducer
+      (reinit [_] (completing-xf xf (reinit rf))))))
+
+
 (defn stateful-xf
   "Takes a normal stateful transducer and returns a stateful rexf
   transducer."
@@ -64,6 +92,32 @@
     (verify-reducer-factory rf)
     (reify ReducerFactory
       (init [this] (stateful-rf xf (init rf))))))
+
+(defn global-xf
+  "Takes a function of no arguments which returns a normal stateful transducer,
+  and returns a global rexf transducer. The state of the transducer must be
+  generated before receiving the reducer function."
+  [xf-fn]
+  (fn [rf]
+    (verify-reducer-factory rf)
+    (reify ReducerFactory
+      (init [this] (global-stateful-rf (xf-fn) (init rf))))))
+
+(defn toplevel
+  "Takes a normal transducer and returns a transducer that only works
+  at the topmost reduction level."
+  [xf]
+  (fn [rfactory]
+    (reify ReducerFactory
+      (init [this]
+        (let [rf (init rfactory)
+              rf' (xf rf)]
+          (reify clojure.lang.IFn
+            (invoke [_] (rf'))
+            (invoke [_ a] (rf' a))
+            (invoke [_ a b] (rf' a b))
+            Reducer
+            (reinit [_] (reinit rf))))))))
 
 (defn stateless-xf
   "Takes a stateless transducer and returns a recursive transducer. The
@@ -74,7 +128,8 @@
     (verify-reducer-factory rf)
     (if (extends? Stateless (type rf)) ;; If stateless, the whole rexf transducer is stateless
       (stateless-rf (xf rf))
-      (stateful-rf xf rf))))
+      (reify ReducerFactory
+        (init [this] (stateful-rf xf (init rf)))))))
 
 (defmacro ^:private defstateless-xf [name]
   `(defn ~name [input#]
@@ -115,7 +170,10 @@
   (reify clojure.lang.IFn
     (invoke [_] (transient []))
     (invoke [_ coll] (persistent! coll))
-    (invoke [_ coll x] (.conj ^clojure.lang.ITransientCollection coll x))
+    (invoke [_ coll x]
+      (if (nil? coll)
+        (prn coll x))
+      (.conj ^clojure.lang.ITransientCollection coll x))
     Reducer
     (reinit [this] this)
     ReducerFactory
@@ -171,6 +229,13 @@
     (reduce (xf (conj!-from to)) (transient to) from)
     (reduce (xf (conj-from to)) to from)))
 
+(defn reduction
+  "Returns a reduction of the rexf reducer factory rfac."
+  [rfac]
+  (let [rf' (init rfac)]
+    {:value (rf')
+     :rf rf'}))
+
 (defn subreduction
   "Returns a subreduction of the rexf reducer rf."
   [rf]
@@ -188,25 +253,30 @@
   [{:keys [value rf]}]
   (rf value))
 
-;; Utility functions to group-with
-(defn stack-last [^ArrayList al]
+;; Utility functions to group-with*
+(defn- stack-last-rf [^ArrayList al rf]
+  (if (.isEmpty al)
+    rf
+    (:rf (.get al (dec (.size al))))))
+
+(defn- stack-last [^ArrayList al]
   (.get al (dec (.size al))))
 
-(defn stack-reset-last! [^ArrayList al v]
+(defn- stack-reset-last! [^ArrayList al v]
   (.set al (dec (.size al)) v))
 
-(defn stack-push [^ArrayList al v]
+(defn- stack-push [^ArrayList al v]
   (.add al v))
 
-(defn stack-pop [^ArrayList al]
+(defn- stack-pop [^ArrayList al]
   (.remove al (dec (.size al))))
 
-(defn stack-add [^ArrayList al v]
+(defn- stack-add [^ArrayList al v]
   (let [inner (stack-last al)]
     (stack-reset-last! al (substep inner v))
     nil))
 
-(defn pop-from-stack [^ArrayList al rf res f stop]
+(defn- pop-from-stack [^ArrayList al rf res f stop]
   (let [inner (stack-pop al)
         val (subcomplete inner)]
     (if (.isEmpty al)
@@ -246,7 +316,8 @@
                 (pop-from-stack al rf res f elem)
                 
                 (start-pred elem)
-                (do (stack-push al (assoc (subreduction rf) :start elem))
+                (do (stack-push al (assoc (subreduction (stack-last-rf al rf))
+                                          :start elem))
                     res)
                 
                 (not (.isEmpty al))
