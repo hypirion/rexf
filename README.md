@@ -1,4 +1,4 @@
-# rex
+# rexf
 
 **Re**cursive **xf**orms – recursive transducers and reducers for the Clojure
 programming language.
