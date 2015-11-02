@@ -1,4 +1,4 @@
-(defproject com.hypirion/rexf "0.1.0-SNAPSHOT"
+(defproject com.hypirion/rexf "0.1.0"
   :description "Recursive reducers and transducers"
   :url "https://github.com/hyPiRion/rexf"
   :license {:name "Eclipse Public License"
