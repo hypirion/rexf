@@ -1,6 +1,6 @@
 # rex
 
-**Re**cursive **xf**orms – generalised transducers and reducers for the Clojure
+**Re**cursive **xf**orms – recursive transducers and reducers for the Clojure
 programming language.
 
 ## ...what?
@@ -9,7 +9,6 @@ Clojure 1.7 introduced transducers, which are functions that take a reducer
 function and returns a reducer function. This in itself sounds straightforward
 enough, but a lot of additional complexity was added to support stateful
 reducers. 
-
 
 The ones coming from take, drop, partition-by and similar. Whereas
 stateful reducers were available pre 1.7, they were frowned upon; you could
@@ -47,26 +46,9 @@ user=> (transduce identity rf-conj! (range 10))
 [0 1 2 3 4 5 6 7 8 9]
 ```
 
-## How
-
-Trick:
-
+These are quirks you can get used to though, however (todo recursive transducers)
 
 ## Usage
-
-```clj
-(require '[com.hypirion.com.rexf :as rexf])
-
-;; reduce is now a function you have to use from this library, and you need to
-wrap reducers.
-user=> (rexf/reduce (rexf/stateless-rf conj) coll)
-;; == (transduce identity conj coll)
-(rexf/reduce (rexf/stateless-rf conj) [] coll)
-;; == (transduce identity conj coll)
-
-```
-
-FIXME
 
 ## License
 
