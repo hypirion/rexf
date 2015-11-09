@@ -46,9 +46,18 @@ user=> (transduce identity rf-conj! (range 10))
 [0 1 2 3 4 5 6 7 8 9]
 ```
 
-These are quirks you can get used to though, however (todo recursive transducers)
+Rexf attempts to make it possible to actually call transducers yourself, by
+setting up a level of indirection. In rexf, transducers take a ReducerFactory
+and produces a ReducerFactory, and a ReducerFactory is a value that can
+initialise a reducer by calling `rexf/init` on it. You can also
+
+This is an experiment, and may or may not make sense. See
+[Recursive Transducers](http://hypirion.com/musings/recursive-transducers) for
+the rationale.
 
 ## Usage
+
+TODO
 
 ## License
 
